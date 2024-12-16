@@ -8,10 +8,45 @@
 #define PORT 8080
 #define BUFFER_SIZE 1024
 
+#define MAX_CARTES_MAINS 5
+
+void recevoir_message(int sock, int *cartes, int *nb_cartes) {
+    char buffer[BUFFER_SIZE];
+    int octets_recus;
+
+    // Recevoir le message du serveur
+    while ((octets_recus = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[octets_recus] = '\0'; // Ajouter le caractère de fin de chaîne
+        printf("Message reçu : %s\n", buffer);
+
+        // Vérifier si le message contient une carte
+        if (strncmp(buffer, "CARTE:", 6) == 0) {
+            int carte;
+            sscanf(buffer + 6, "%d", &carte);
+            if (*nb_cartes < MAX_CARTES_MAINS) {
+                cartes[*nb_cartes] = carte;
+                (*nb_cartes)++;
+                printf("Carte ajoutée à la main : %d\n", carte);
+            } else {
+                printf("Main pleine, impossible d'ajouter la carte : %d\n", carte);
+            }
+        } else {
+            printf("Message du serveur : %s\n", buffer);
+        }
+    }
+
+    if (octets_recus == 0) {
+        printf("Le serveur s'est déconnecté.\n");
+    } else {
+        perror("Erreur lors de la réception");
+    }
+}
+
 int main() {
     int sock;
     struct sockaddr_in server_addr;
-    char message[BUFFER_SIZE];
+    int cartes[MAX_CARTES_MAINS];
+    int nb_cartes = 0;
 
     // Créer le socket du client
     sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -34,19 +69,10 @@ int main() {
 
     printf("Connecté au serveur %s:%d\n", SERVER_IP, PORT);
 
-    // Demander un message à l'utilisateur et l'envoyer au serveur
-    printf("Entrez un message à envoyer au serveur : ");
-    fgets(message, sizeof(message), stdin);
-    send(sock, message, strlen(message), 0);
+    // Recevoir les messages du serveur et ajouter les cartes à la main
+    recevoir_message(sock, cartes, &nb_cartes);
 
-    // Recevoir la réponse du serveur
-    int bytes_received = recv(sock, message, sizeof(message) - 1, 0);
-    if (bytes_received > 0) {
-        message[bytes_received] = '\0';  // Ajouter le caractère de fin de chaîne
-        printf("Réponse du serveur : %s\n", message);
-    }
-
-    // Fermer le socket
+    // Fermer le socket du client
     close(sock);
     return 0;
 }

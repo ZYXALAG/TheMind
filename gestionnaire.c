@@ -5,82 +5,103 @@
 #include <arpa/inet.h>
 
 #define PORT 8080
-#define MAX_CLIENTS 2
-#define BUFFER_SIZE 1024
+#define MAX_JOUEURS 2
+#define TAILLE_BUFFER 1024
 
-// Fonction pour gérer la communication avec un client
-void gestion_client(int client_socket) {
-    char buffer[BUFFER_SIZE];
-    int bytes_received;
+#define MAX_CARTES 100
+#define MAX_CARTES_MAINS 5
 
-    // Recevoir le message du client
-    while ((bytes_received = read(client_socket, buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[bytes_received] = '\0'; // Ajouter le caractère de fin de chaîne
-        printf("Message reçu : %s\n", buffer);
+void envoi_carte(int socket_client, int *cartes, int *nb_cartes) {
+    // Choisir une carte aléatoire
+    int index_carte = rand() % *nb_cartes;
+    int carte = cartes[index_carte];
 
-        // Répondre au client
-        const char *message = "Message reçu avec succès";
-        write(client_socket, message, strlen(message));
+    // Envoyer la carte au client avec un préfixe "CARTE:"
+    char message[TAILLE_BUFFER];
+    sprintf(message, "CARTE:%d\n", carte);
+    write(socket_client, message, strlen(message));
+
+    // Supprimer la carte de la liste des cartes
+    for (int i = index_carte; i < *nb_cartes - 1; i++) {
+        cartes[i] = cartes[i + 1];
     }
-
-    if (bytes_received == 0) {
-        printf("Le client s'est déconnecté.\n");
-    } else {
-        perror("Erreur lors de la réception");
-    }
-
-    // Fermer la connexion avec le client
-    close(client_socket);
+    (*nb_cartes)--;
 }
 
 int main() {
-    int server_socket, client_socket;
-    struct sockaddr_in server_addr, client_addr;
-    socklen_t client_len = sizeof(client_addr);
+
+    int rounds = 1;
+
+    // Initialiser le jeu de cartes
+    int cartes[MAX_CARTES];
+
+    // Remplir la liste avec des valeurs de 1 à MAX_CARTES
+    for (int i = 0; i < MAX_CARTES; i++) {
+        cartes[i] = i + 1;
+    }
+
+    int socket_serveur, socket_client;
+    struct sockaddr_in adresse_serveur, adresse_client;
+    socklen_t taille_client = sizeof(adresse_client);
 
     // Créer le socket du serveur
-    server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_socket == -1) {
+    socket_serveur = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_serveur == -1) {
         perror("Erreur lors de la création du socket");
         exit(EXIT_FAILURE);
     }
 
     // Configurer l'adresse du serveur
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;  // Écoute sur toutes les interfaces réseau
-    server_addr.sin_port = htons(PORT);  // Port de communication
+    adresse_serveur.sin_family = AF_INET;
+    adresse_serveur.sin_addr.s_addr = INADDR_ANY;  // Écoute sur toutes les interfaces réseau
+    adresse_serveur.sin_port = htons(PORT);  // Port de communication
 
     // Associer l'adresse et le port au socket
-    if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    if (bind(socket_serveur, (struct sockaddr *)&adresse_serveur, sizeof(adresse_serveur)) < 0) {
         perror("Erreur lors du bind");
-        close(server_socket);
+        close(socket_serveur);
         exit(EXIT_FAILURE);
     }
 
     // Écouter les connexions entrantes
-    if (listen(server_socket, MAX_CLIENTS) < 0) {
+    if (listen(socket_serveur, MAX_JOUEURS) < 0) {
         perror("Erreur lors de l'écoute");
-        close(server_socket);
+        close(socket_serveur);
         exit(EXIT_FAILURE);
     }
 
     printf("Serveur en écoute sur le port %d...\n", PORT);
 
     // Accepter les connexions des clients
-    while (1) {
-        client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_len);
-        if (client_socket < 0) {
+    int joueurs_connectes = 0;
+    
+    while (joueurs_connectes < MAX_JOUEURS) {
+        socket_client = accept(socket_serveur, (struct sockaddr *)&adresse_client, &taille_client);
+        if (socket_client < 0) {
             perror("Erreur lors de l'acceptation de la connexion");
             continue;
         }
-
+    
         printf("Nouveau client connecté.\n");
+        joueurs_connectes++;
 
-        // Gérer la communication avec le client
-        gestion_client(client_socket);
+        const char *message = "Bienvenue sur le serveur de jeu de cartes.\n";
+        write(socket_client, message, strlen(message));
+    }
+    
+    printf("Nombre maximum de joueurs connectés. Lancement de la partie.\n");
+
+    // Envoyer des cartes aux joueurs
+    int nb_cartes = MAX_CARTES_MAINS;
+    for (int i = 0; i < MAX_JOUEURS; i++) {
+        for (int j = 0; j < MAX_CARTES_MAINS; j++) {
+            envoi_carte(socket_client, cartes, &nb_cartes);
+        }
     }
 
+
+
     // Fermer le socket du serveur
-    close(server_socket);
+    // close(socket_serveur);
     return 0;
 }

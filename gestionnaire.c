@@ -8,7 +8,7 @@
 #define PORT 12345
 #define MAX_JOUEURS 2
 #define MAX_CARTES 10
-#define MAX_SIZE_MAIN = 1
+#define MAX_SIZE_MAIN 2
 
 // Structure pour le jeu
 typedef struct {
@@ -16,6 +16,13 @@ typedef struct {
     int nombre_cartes;
     int tour_actuel;
 } Jeu;
+
+void afficher_cartes_joueur(int main_joueur[], int taille_main) {
+    printf("Cartes dans la main du joueur:\n");
+    for (int i = 0; i < taille_main; i++) {
+        printf("Carte %d: %d\n", i + 1, main_joueur[i]);
+    }
+}
 
 void erreur(const char *message) {
     perror(message);
@@ -43,7 +50,7 @@ void initialiser_jeu(Jeu *jeu) {
 }
 
 // Distribuer les cartes aux joueurs
-void distribuer_cartes(Jeu *jeu, int cartes_par_joueur, int mains_joueurs[MAX_JOUEURS][MAX_CARTES]) {
+void distribuer_cartes(Jeu *jeu, int cartes_par_joueur, int mains_joueurs[MAX_JOUEURS][MAX_SIZE_MAIN]) {
     for (int i = 0; i < MAX_JOUEURS; i++) {
         for (int j = 0; j < cartes_par_joueur; j++) {
             if (jeu->nombre_cartes > 0) {
@@ -79,7 +86,10 @@ void envoyer_cartes_joueur(int socket, int *cartes, int nombre_cartes) {
     for (int i = 0; i < nombre_cartes; i++) {
         if (cartes[i] != -1) {  // Vérifie si la carte est valide
             snprintf(buffer, sizeof(buffer), "%d ", cartes[i]);
+            
+            printf("carte ajouté au buffer %s\n", buffer);
             strcat(message, buffer);
+            printf("carte ajouté au message %s\n", message);
         }
     }
 
@@ -135,17 +145,24 @@ int main() {
     initialiser_jeu(&jeu);
 
     // Distribution des cartes pour le premier tour
-    int mains_joueurs[MAX_JOUEURS][MAX_CARTES] = {};
-    distribuer_cartes(&jeu, jeu.tour_actuel, mains_joueurs);
+    int mains_joueurs[MAX_JOUEURS][MAX_SIZE_MAIN];
+    int nombre_cartes_premier_tour = 2;
+    printf("sizeof %d\n", (int)(sizeof(mains_joueurs[0])/sizeof(int)));
+    distribuer_cartes(&jeu, nombre_cartes_premier_tour, mains_joueurs);
+    
+    afficher_cartes_joueur(mains_joueurs[0], sizeof(mains_joueurs[0])/sizeof(int));
+    afficher_cartes_joueur(mains_joueurs[1], sizeof(mains_joueurs[1])/sizeof(int));
 
     // Boucle de jeu
-    int cartes_jouees[MAX_CARTES] = {0};
+    int cartes_jouees[MAX_CARTES] = {};
     int index_cartes_jouees = 0;
 
     while (1) {
         for (int i = 0; i < MAX_JOUEURS; i++) {
             // Envoyer les cartes disponibles au joueur
-            envoyer_cartes_joueur(sockets_joueurs[i], mains_joueurs[i], jeu.tour_actuel);
+            envoyer_cartes_joueur(sockets_joueurs[i], mains_joueurs[i], MAX_SIZE_MAIN);
+        }
+        for (int i = 0; i < MAX_JOUEURS; i++) {
 
             char message[256];
             char reponse[256];
@@ -160,7 +177,7 @@ int main() {
 
             // Vérification si le joueur possède la carte
             int carte_valide = 0;
-            for (int j = 0; j < jeu.tour_actuel; j++) {
+            for (int j = 0; j < MAX_SIZE_MAIN; j++) {
                 if (mains_joueurs[i][j] == carte_jouee) {
                     mains_joueurs[i][j] = -1; // Retirer la carte de la main
                     carte_valide = 1;
@@ -189,7 +206,7 @@ int main() {
 
         // Préparer le tour suivant
         jeu.tour_actuel++;
-        distribuer_cartes(&jeu, jeu.tour_actuel, mains_joueurs);
+        distribuer_cartes(&jeu, 1, mains_joueurs);
     }
 
 fin:

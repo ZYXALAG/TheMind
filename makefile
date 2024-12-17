@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-Wall
 
-all: gestionnaire joueur robot
+all: gestionnaire joueur robot classement
 
 gestionnaire: gestionnaire.c
 	$(CC) $(CFLAGS) gestionnaire.c -o gestionnaire
@@ -13,4 +13,4 @@ joueur_robot: robot.c
 	$(CC) $(CFLAGS) joueur_robot.c -o robot
 
 clean:
-	rm -f gestionnaire joueur robot
+	rm -f gestionnaire joueur robot classement

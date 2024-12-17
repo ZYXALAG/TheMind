@@ -2,46 +2,58 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_JOUEURS 2
-#define MAX_NOM 50
+#define MAX_EQUIPES 10
 
 typedef struct {
-    char nom[MAX_NOM];
+    int nb_joueurs;
     int manches_reussies;
-} Joueur;
+} Equipe;
 
-void afficher_classement(Joueur joueurs[], int n) {
-    printf("\nClassement des joueurs :\n");
+void afficher_classement(Equipe equipes[], int n) {
+    printf("\nClassement des équipes :\n");
     for (int i = 0; i < n; i++) {
-        printf("%d. %s - %d manches réussies\n", i + 1, joueurs[i].nom, joueurs[i].manches_reussies);
+        printf("%d : %d joueurs - %d manches réussies\n", i + 1, equipes[i].nb_joueurs, equipes[i].manches_reussies);
     }
 }
 
-void trier_classement(Joueur joueurs[], int n) {
+void trier_classement(Equipe equipes[], int n) {
     // Tri simple par sélection
     for (int i = 0; i < n - 1; i++) {
         for (int j = i + 1; j < n; j++) {
-            if (joueurs[i].manches_reussies < joueurs[j].manches_reussies) {
-                Joueur temp = joueurs[i];
-                joueurs[i] = joueurs[j];
-                joueurs[j] = temp;
+            if (equipes[i].manches_reussies < equipes[j].manches_reussies) {
+                Equipe temp = equipes[i];
+                equipes[i] = equipes[j];
+                equipes[j] = temp;
             }
         }
     }
 }
 
-void sauvegarder_classement(Joueur joueurs[], int n) {
+void sauvegarder_classement(Equipe equipes[], int n) {
     FILE *fichier = fopen("classement.txt", "w");
     if (fichier == NULL) {
         printf("Erreur lors de l'ouverture du fichier.\n");
         return;
     }
 
-    fprintf(fichier, "Classement des joueurs :\n");
+    fprintf(fichier, "Classement des équipes :\n");
     for (int i = 0; i < n; i++) {
-        fprintf(fichier, "%d. %s - %d manches réussies\n", i + 1, joueurs[i].nom, joueurs[i].manches_reussies);
+        fprintf(fichier, "%d : %d joueurs - %d manches réussies\n", i + 1, equipes[i].nb_joueurs, equipes[i].manches_reussies);
     }
 
     fclose(fichier);
     printf("Classement sauvegardé dans 'classement.txt'.\n");
+}
+
+int main() {
+    Equipe equipes[MAX_EQUIPES] = {
+    };
+
+    int n = MAX_EQUIPES;
+
+    trier_classement(equipes, n);
+    afficher_classement(equipes, n);
+    sauvegarder_classement(equipes, n);
+
+    return 0;
 }

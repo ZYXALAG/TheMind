@@ -2,10 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#define PORT 12345
+#define PORT 8080
+#define BUFFER_SIZE 1024
 #define MAX_CARTES 1
 
 // Fonction pour afficher les cartes du joueur
@@ -18,7 +20,6 @@ void afficher_cartes(int *cartes, int nombre_cartes) {
     }
     printf("\n");
 }
-
 // Fonction pour vérifier si une carte est dans la main du joueur
 int carte_dans_main(int carte, int *cartes, int nombre_cartes) {
     for (int i = 0; i < nombre_cartes; i++) {
@@ -29,11 +30,65 @@ int carte_dans_main(int carte, int *cartes, int nombre_cartes) {
     return -1; // Carte non trouvée
 }
 
+
+void chat_loop(int server_socket, int *cartes, int nombre_cartes, int idjoueur) {
+    int carte_choisie;
+    fd_set readfds;
+    char buffer[BUFFER_SIZE];
+
+    while (1) {
+        // Initialiser le set de descripteurs
+        FD_ZERO(&readfds);
+        FD_SET(STDIN_FILENO, &readfds);         // Ajouter stdin (entrée utilisateur)
+        FD_SET(server_socket, &readfds);       // Ajouter le socket serveur
+        int max_fd = (server_socket > STDIN_FILENO) ? server_socket : STDIN_FILENO;
+
+        // Attendre une activité sur stdin ou le socket
+        int activity = select(max_fd + 1, &readfds, NULL, NULL, NULL);
+
+        if (activity < 0) {
+            perror("Erreur avec select");
+            break;
+        }
+
+        // Si l'utilisateur a saisi quelque chose
+        if (FD_ISSET(STDIN_FILENO, &readfds)) {
+            fgets(buffer, BUFFER_SIZE, stdin); // Lire l'entrée utilisateur
+            
+            // Vérifier si la carte est valide (présente dans la main du joueur)
+                carte_choisie = atoi(buffer);
+                int indice = carte_dans_main(carte_choisie, cartes, nombre_cartes);
+                if (indice != -1) {
+                    // Retirer la carte de la main et informer le serveur
+                    cartes[indice] = -1;
+                    snprintf(buffer, sizeof(buffer), "%d %d", idjoueur, carte_choisie);
+                    send(server_socket, buffer, strlen(buffer), 0);
+                    printf("Vous avez joué la carte %d.\n", carte_choisie);
+                    break;  // Quitter la boucle de sélection de carte
+                } else {
+                    printf("Carte invalide. Veuillez choisir une carte dans votre main.\n");
+                }
+        }
+
+        // Si le serveur a envoyé un message
+        if (FD_ISSET(server_socket, &readfds)) {
+            int bytes_received = recv(server_socket, buffer, BUFFER_SIZE - 1, 0);
+            if (bytes_received <= 0) {
+                printf("Le serveur a fermé la connexion.\n");
+                break;
+            }
+            buffer[bytes_received] = '\0'; // Null-terminate le message
+            printf("Message du serveur : %s\n", buffer +4);
+        }
+    }
+}
+
+
 int main() {
     int serveur_fd;
     struct sockaddr_in serveur_addr;
-    char buffer[1024] = {};
-    int cartes[MAX_CARTES] = {}; // Cartes dans la main du joueur
+    char buffer[1024] = {0};
+    int cartes[MAX_CARTES] = {0}; // Cartes dans la main du joueur
     int nombre_cartes = 0;
 
     // Création de la socket
@@ -57,7 +112,7 @@ int main() {
     }
 
     printf("Connecté au serveur ! En attente des instructions...\n");
-
+    int idjoueur;
     while (1) {
         // Réception des messages du serveur
         int bytes_recus = recv(serveur_fd, buffer, sizeof(buffer) - 1, 0);
@@ -66,10 +121,21 @@ int main() {
             break;
         }
         buffer[bytes_recus] = '\0';
-        printf("Message du serveur : %s\n", buffer);
+        if (strncmp(buffer, "100", 3) == 0) {
+            // Extraire les cartes envoyées par le serveur
+            char *id_str = buffer + 4; // Ignore "Vos cartes : "
+            nombre_cartes = 0;
+            idjoueur= atoi(id_str);
+            continue;
+        }
+
+        if (strncmp(buffer, "000", 3) == 0) {
+            continue;
+        }
+        printf("Message du serveur : %s\n", buffer+4);
 
         // Vérifier si le message contient la liste des cartes
-        if (strncmp(buffer, "Vos cartes :", 12) == 0) {
+        if (strncmp(buffer, "103", 3) == 0) {
             // Extraire les cartes envoyées par le serveur
             char *cartes_str = buffer + 12; // Ignore "Vos cartes : "
             char *token = strtok(cartes_str, " ");
@@ -78,32 +144,13 @@ int main() {
                 cartes[nombre_cartes++] = atoi(token);
                 token = strtok(NULL, " ");
             }
-            afficher_cartes(cartes, nombre_cartes);
             continue;
         }
 
         // Si c'est le tour du joueur
-        if (strncmp(buffer, "Votre tour", 10) == 0) {
-            int carte_choisie;
+        if (strncmp(buffer, "101", 3) == 0) {
+            chat_loop(serveur_fd, cartes, nombre_cartes, idjoueur);
 
-            // Demander à l'utilisateur de choisir une carte valide
-            while (1) {
-                printf("Choisissez une carte à jouer : ");
-                scanf("%d", &carte_choisie);
-
-                // Vérifier si la carte est valide (présente dans la main du joueur)
-                int indice = carte_dans_main(carte_choisie, cartes, nombre_cartes);
-                if (indice != -1) {
-                    // Retirer la carte de la main et informer le serveur
-                    cartes[indice] = -1;
-                    snprintf(buffer, sizeof(buffer), "%d", carte_choisie);
-                    send(serveur_fd, buffer, strlen(buffer), 0);
-                    printf("Vous avez joué la carte %d.\n", carte_choisie);
-                    break;  // Quitter la boucle de sélection de carte
-                } else {
-                    printf("Carte invalide. Veuillez choisir une carte dans votre main.\n");
-                }
-            }
         }
     }
 

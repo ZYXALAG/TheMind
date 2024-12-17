@@ -4,21 +4,23 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <sys/select.h>
+#include <sys/socket.h>
 
-#define PORT 12345
+#define PORT 8080
 #define MAX_JOUEURS 2
-#define MAX_CARTES 10
-#define MAX_SIZE_MAIN 2
+#define TAILLE_BUFFER 1024
 
-// Structure pour le jeu
+#define MAX_CARTES 100
+
 typedef struct {
     int cartes[MAX_CARTES]; // Cartes restantes dans le jeu
     int nombre_cartes;
     int tour_actuel;
 } Jeu;
 
-void afficher_cartes_joueur(int main_joueur[], int taille_main) {
-    printf("Cartes dans la main du joueur:\n");
+void afficher_cartes_joueur(int main_joueur[], int taille_main, int joueur) {
+    printf("Cartes dans la main du joueur %d:\n",joueur);
     for (int i = 0; i < taille_main; i++) {
         printf("Carte %d: %d\n", i + 1, main_joueur[i]);
     }
@@ -29,7 +31,16 @@ void erreur(const char *message) {
     exit(EXIT_FAILURE);
 }
 
-// Initialiser le jeu
+void shuffle(Jeu *jeu){
+    srand(time(NULL));
+    for (int i = 0; i < jeu->nombre_cartes; i++) {
+        int j = rand() % jeu->nombre_cartes;
+        int temp = jeu->cartes[i];
+        jeu->cartes[i] = jeu->cartes[j];
+        jeu->cartes[j] = temp;
+    }
+}
+
 void initialiser_jeu(Jeu *jeu) {
     jeu->nombre_cartes = MAX_CARTES;
     jeu->tour_actuel = 1;
@@ -38,19 +49,12 @@ void initialiser_jeu(Jeu *jeu) {
     for (int i = 0; i < MAX_CARTES; i++) {
         jeu->cartes[i] = i + 1;
     }
-
-    // Mélanger les cartes
-    srand(time(NULL));
-    for (int i = 0; i < MAX_CARTES; i++) {
-        int j = rand() % MAX_CARTES;
-        int temp = jeu->cartes[i];
-        jeu->cartes[i] = jeu->cartes[j];
-        jeu->cartes[j] = temp;
-    }
+    shuffle(jeu);
 }
 
 // Distribuer les cartes aux joueurs
-void distribuer_cartes(Jeu *jeu, int cartes_par_joueur, int mains_joueurs[MAX_JOUEURS][MAX_SIZE_MAIN]) {
+void distribuer_cartes(Jeu *jeu, int mains_joueurs[MAX_JOUEURS][MAX_CARTES]) {
+    int cartes_par_joueur = jeu->tour_actuel;
     for (int i = 0; i < MAX_JOUEURS; i++) {
         for (int j = 0; j < cartes_par_joueur; j++) {
             if (jeu->nombre_cartes > 0) {
@@ -61,35 +65,22 @@ void distribuer_cartes(Jeu *jeu, int cartes_par_joueur, int mains_joueurs[MAX_JO
         }
     }
 }
-
-// Envoyer un message à un client
 void envoyer_message(int socket, const char *message) {
     if (send(socket, message, strlen(message), 0) == -1) {
         erreur("Erreur d'envoi du message");
     }
 }
 
-// Recevoir un message d'un client
-void recevoir_message(int socket, char *buffer, size_t taille) {
-    memset(buffer, 0, taille);
-    if (recv(socket, buffer, taille - 1, 0) <= 0) {
-        erreur("Erreur de réception du message");
-    }
-}
 
-// Envoyer les cartes d'un joueur
 void envoyer_cartes_joueur(int socket, int *cartes, int nombre_cartes) {
-    char message[1024] = "Vos cartes : ";
+    char message[1024] = "103 Vos cartes : ";
     char buffer[16];
 
     // Boucle pour ajouter chaque carte au message
     for (int i = 0; i < nombre_cartes; i++) {
         if (cartes[i] != -1) {  // Vérifie si la carte est valide
             snprintf(buffer, sizeof(buffer), "%d ", cartes[i]);
-            
-            printf("carte ajouté au buffer %s\n", buffer);
             strcat(message, buffer);
-            printf("carte ajouté au message %s\n", message);
         }
     }
 
@@ -98,7 +89,60 @@ void envoyer_cartes_joueur(int socket, int *cartes, int nombre_cartes) {
     envoyer_message(socket, message);
 }
 
+int verifier_donnees_joueurs(int sockets[], int nb_joueurs) {
+    fd_set readfds;
+    int max_sd = 0;
+    struct timeval timeout;
+
+    // Initialiser le set de descripteurs de fichiers
+    FD_ZERO(&readfds);
+
+    // Ajouter les sockets des joueurs au set
+    for (int i = 0; i < nb_joueurs; i++) {
+        FD_SET(sockets[i], &readfds);
+        if (sockets[i] > max_sd) {
+            max_sd = sockets[i];
+        }
+    }
+
+    // Définir le délai d'attente (timeout)
+    timeout.tv_sec = 5000;  // 5 secondes
+    timeout.tv_usec = 0;
+
+    // Utiliser select pour surveiller les sockets
+    int activity = select(max_sd + 1, &readfds, NULL, NULL, &timeout);
+
+    if (activity < 0) {
+        perror("Erreur lors de l'appel à select");
+        return -1;
+    } else if (activity == 0) {
+        printf("Aucune donnée reçue dans le délai imparti\n");
+        return 0;
+    } else {
+        // Vérifier quel socket a des données disponibles
+        for (int i = 0; i < nb_joueurs; i++) {
+            if (FD_ISSET(sockets[i], &readfds)) {
+                printf("Des données ont été reçues du joueur %d\n", i+1);
+                return sockets[i];
+            }
+        }
+    }
+
+    return -1;
+}
+
+void recevoir_message(int socket[], char *buffer, size_t taille) {
+    memset(buffer, 0, taille);
+    int activesocket = verifier_donnees_joueurs(socket, MAX_JOUEURS);
+    if (recv(activesocket, buffer, taille - 1, 0) <= 0) {
+        erreur("Erreur de réception du message");
+    }
+}
+
+
+
 int main() {
+
     int serveur_fd, nouvelle_socket;
     struct sockaddr_in adresse;
     int addrlen = sizeof(adresse);
@@ -127,6 +171,7 @@ int main() {
     printf("Gestionnaire en attente de joueurs sur le port %d...\n", PORT);
 
     int joueurs_connectes = 0;
+    
     while (joueurs_connectes < MAX_JOUEURS) {
         // Accepter une connexion
         if ((nouvelle_socket = accept(serveur_fd, (struct sockaddr *)&adresse, (socklen_t *)&addrlen)) < 0) {
@@ -139,76 +184,135 @@ int main() {
     }
 
     printf("Tous les joueurs sont connectés. Le jeu peut commencer.\n");
+    for (int i = 0; i < MAX_JOUEURS; i++)
+    {
+        char messagesocket[256];
+        snprintf(messagesocket, sizeof(messagesocket), "100 %d.\n", i);
+        envoyer_message(sockets_joueurs[i], messagesocket);
+    }
 
-    // Initialisation du jeu
     Jeu jeu;
     initialiser_jeu(&jeu);
+    int mains_joueurs[MAX_JOUEURS][MAX_CARTES];
+    distribuer_cartes(&jeu, mains_joueurs);
 
-    // Distribution des cartes pour le premier tour
-    int mains_joueurs[MAX_JOUEURS][MAX_SIZE_MAIN];
-    int nombre_cartes_premier_tour = 2;
-    printf("sizeof %d\n", (int)(sizeof(mains_joueurs[0])/sizeof(int)));
-    distribuer_cartes(&jeu, nombre_cartes_premier_tour, mains_joueurs);
-    
-    afficher_cartes_joueur(mains_joueurs[0], sizeof(mains_joueurs[0])/sizeof(int));
-    afficher_cartes_joueur(mains_joueurs[1], sizeof(mains_joueurs[1])/sizeof(int));
+    while (1){
+        int playershandTEMP[MAX_JOUEURS][jeu.tour_actuel];
+        for (int i = 0; i < MAX_JOUEURS; i++){
+            for (int j = 0; j < jeu.tour_actuel; j++){
+                    playershandTEMP[i][j] = mains_joueurs[i][j];   
+                }
+                
+            }
+            int cartes_jouees[MAX_CARTES] = {};
+            int index_cartes_jouees = 0;
+            int nb_carte_joueur[MAX_JOUEURS] ;
+            for(int i = 0; i < MAX_JOUEURS; i++){
+                nb_carte_joueur[i] = 0;
+            }
+            for (int i = 0; i < MAX_JOUEURS; i++)
+            {     
+                afficher_cartes_joueur(playershandTEMP[i], sizeof(playershandTEMP[i])/sizeof(int),i+1);
+            }
 
-    // Boucle de jeu
-    int cartes_jouees[MAX_CARTES] = {};
-    int index_cartes_jouees = 0;
+            
+            for (int i = 0; i < MAX_JOUEURS; i++){
+                sleep(0.5);
+                envoyer_cartes_joueur(sockets_joueurs[i], playershandTEMP[i], jeu.tour_actuel);
+                sleep(1);
+                int current_time = time(NULL);
+                char message[256];
+                snprintf(message, sizeof(message), "000 %d\n", current_time+5);
+                envoyer_message(sockets_joueurs[i], message);
+                char message[256];
+                snprintf(message, sizeof(message), "101 Vous pouvez jouer. Jouez une carte.\n");
+                envoyer_message(sockets_joueurs[i], message);
+            }
+            while (1){
 
-    while (1) {
-        for (int i = 0; i < MAX_JOUEURS; i++) {
-            // Envoyer les cartes disponibles au joueur
-            envoyer_cartes_joueur(sockets_joueurs[i], mains_joueurs[i], MAX_SIZE_MAIN);
-        }
-        for (int i = 0; i < MAX_JOUEURS; i++) {
+                char reponse[256];
 
-            char message[256];
-            char reponse[256];
-
-            // Informer le joueur de son tour
-            snprintf(message, sizeof(message), "Votre tour. Jouez une carte.\n");
-            envoyer_message(sockets_joueurs[i], message);
-
-            // Recevoir la carte jouée
-            recevoir_message(sockets_joueurs[i], reponse, sizeof(reponse));
-            int carte_jouee = atoi(reponse);
-
-            // Vérification si le joueur possède la carte
+                recevoir_message(sockets_joueurs, reponse, sizeof(reponse));
+                char *token = strtok(reponse, " ");
+                int curretplayer = atoi(token);
+                token = strtok(NULL, " ");
+                int carte_jouee = atoi(token);
+                
+                // Vérification si le joueur possède la carte
             int carte_valide = 0;
-            for (int j = 0; j < MAX_SIZE_MAIN; j++) {
-                if (mains_joueurs[i][j] == carte_jouee) {
-                    mains_joueurs[i][j] = -1; // Retirer la carte de la main
+            for (int j = 0; j < jeu.tour_actuel; j++) {
+                if (playershandTEMP[curretplayer][j] == carte_jouee) {
+                    playershandTEMP[curretplayer][j] = -1; // Retirer la carte de la main
                     carte_valide = 1;
                     break;
                 }
             }
 
             if (!carte_valide) {
-                printf("Joueur %d a tenté de jouer une carte invalide : %d\n", i + 1, carte_jouee);
+                char message[256];
+                printf("Joueur %d a tenté de jouer une carte invalide : %d\n", curretplayer + 1, carte_jouee);
                 snprintf(message, sizeof(message), "Carte invalide. Veuillez jouer une carte que vous possédez.\n");
-                envoyer_message(sockets_joueurs[i], message);
-                i--; // Rejouer le même joueur
+                envoyer_message(sockets_joueurs[curretplayer], message);
                 continue;
             }
 
-            printf("Joueur %d a joué : %d\n", i + 1, carte_jouee);
+            printf("Joueur %d a joué : %d\n", curretplayer + 1, carte_jouee);
 
             // Vérification de l'ordre des cartes
             if (index_cartes_jouees > 0 && carte_jouee < cartes_jouees[index_cartes_jouees - 1]) {
                 printf("Ordre incorrect ! La partie est terminée.\n");
                 goto fin;
+            } 
+            nb_carte_joueur[curretplayer]++;
+            cartes_jouees[index_cartes_jouees++] = carte_jouee;
+            printf("Cartes jouées : %d \n", index_cartes_jouees);
+
+            for (int i = 0; i < MAX_JOUEURS; i++)
+            {
+                if (i!=curretplayer)
+                {
+                    char message[256];
+                    snprintf(message, sizeof(message), "105 Joueur %d a joué : %d\n", curretplayer + 1, carte_jouee);
+                    envoyer_message(sockets_joueurs[i], message);
+                }
+                
+            }
+            
+
+            if (index_cartes_jouees == jeu.tour_actuel * MAX_JOUEURS) {
+                for (int i = 0; i < MAX_JOUEURS; i++)
+                {
+                    char message[256];
+                    snprintf(message, sizeof(message), "108 Félicitation vous avez reussis la manche\n");
+                    envoyer_message(sockets_joueurs[i], message);
+                    printf("Félicitation vous avez reussis la manche\n");
+                }
+                break;
             }
 
-            cartes_jouees[index_cartes_jouees++] = carte_jouee;
+
+
+            printf("carte jouée par le joueur %d : %d\n", curretplayer, nb_carte_joueur[curretplayer]);
+            if (nb_carte_joueur[curretplayer] <jeu.tour_actuel)
+            {
+                char message[256];
+                snprintf(message, sizeof(message), "101 Vous pouvez jouer. Jouez une carte.\n");
+                envoyer_message(sockets_joueurs[curretplayer], message);
+            
+            } else{
+                char message[256];
+                snprintf(message, sizeof(message), "106 Vous avez joué toutes vos cartes. Attendez la fin de la manche.\n");
+                envoyer_message(sockets_joueurs[curretplayer], message);
+            }
+            
+
+
         }
-
-        // Préparer le tour suivant
         jeu.tour_actuel++;
-        distribuer_cartes(&jeu, 1, mains_joueurs);
-    }
+        distribuer_cartes(&jeu, mains_joueurs);
 
+    }
+    
 fin:
     // Fermeture des sockets
     for (int i = 0; i < MAX_JOUEURS; i++) {

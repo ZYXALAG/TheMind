@@ -261,6 +261,16 @@ int main() {
             // Vérification de l'ordre des cartes
             if (index_cartes_jouees > 0 && carte_jouee < cartes_jouees[index_cartes_jouees - 1]) {
                 printf("Ordre incorrect ! La partie est terminée.\n");
+                for (int i = 0; i < MAX_JOUEURS; i++)
+                {
+                    char message1[256];
+                    snprintf(message1, sizeof(message1), "105 Joueur %d a joué : %d\n", curretplayer + 1, carte_jouee);
+                    envoyer_message(sockets_joueurs[i], message1);
+                    sleep(1);
+                    char message[256];
+                    snprintf(message, sizeof(message), "105 partie terminée vous avez perdu\n");
+                    envoyer_message(sockets_joueurs[i], message);
+                }
                 goto fin;
             } 
             nb_carte_joueur[curretplayer]++;

@@ -19,8 +19,8 @@ typedef struct {
     int tour_actuel;
 } Jeu;
 
-void afficher_cartes_joueur(int main_joueur[], int taille_main) {
-    printf("Cartes dans la main du joueur:\n");
+void afficher_cartes_joueur(int main_joueur[], int taille_main, int joueur) {
+    printf("Cartes dans la main du joueur %d:\n",joueur);
     for (int i = 0; i < taille_main; i++) {
         printf("Carte %d: %d\n", i + 1, main_joueur[i]);
     }
@@ -73,17 +73,14 @@ void envoyer_message(int socket, const char *message) {
 
 
 void envoyer_cartes_joueur(int socket, int *cartes, int nombre_cartes) {
-    char message[1024] = "Vos cartes : ";
+    char message[1024] = "103 Vos cartes : ";
     char buffer[16];
 
     // Boucle pour ajouter chaque carte au message
     for (int i = 0; i < nombre_cartes; i++) {
         if (cartes[i] != -1) {  // Vérifie si la carte est valide
             snprintf(buffer, sizeof(buffer), "%d ", cartes[i]);
-            
-            printf("carte ajouté au buffer %s\n", buffer);
             strcat(message, buffer);
-            printf("carte ajouté au message %s\n", message);
         }
     }
 
@@ -125,7 +122,7 @@ int verifier_donnees_joueurs(int sockets[], int nb_joueurs) {
         // Vérifier quel socket a des données disponibles
         for (int i = 0; i < nb_joueurs; i++) {
             if (FD_ISSET(sockets[i], &readfds)) {
-                printf("Des données ont été reçues du joueur %d\n", i);
+                printf("Des données ont été reçues du joueur %d\n", i+1);
                 return sockets[i];
             }
         }
@@ -213,9 +210,11 @@ int main() {
             for(int i = 0; i < MAX_JOUEURS; i++){
                 nb_carte_joueur[i] = 0;
             }
+            for (int i = 0; i < MAX_JOUEURS; i++)
+            {     
+                afficher_cartes_joueur(playershandTEMP[i], sizeof(playershandTEMP[i])/sizeof(int),i+1);
+            }
 
-            afficher_cartes_joueur(playershandTEMP[0], sizeof(playershandTEMP[0])/sizeof(int));
-            afficher_cartes_joueur(playershandTEMP[1], sizeof(playershandTEMP[1])/sizeof(int));
             
             for (int i = 0; i < MAX_JOUEURS; i++){
                 sleep(0.5);
@@ -264,11 +263,31 @@ int main() {
             cartes_jouees[index_cartes_jouees++] = carte_jouee;
             printf("Cartes jouées : %d \n", index_cartes_jouees);
 
+            for (int i = 0; i < MAX_JOUEURS; i++)
+            {
+                if (i!=curretplayer)
+                {
+                    char message[256];
+                    snprintf(message, sizeof(message), "105 Joueur %d a joué : %d\n", curretplayer + 1, carte_jouee);
+                    envoyer_message(sockets_joueurs[i], message);
+                }
+                
+            }
+            
 
             if (index_cartes_jouees == jeu.tour_actuel * MAX_JOUEURS) {
-                printf("Félicitation vous avez reussis la manche\n");
+                for (int i = 0; i < MAX_JOUEURS; i++)
+                {
+                    char message[256];
+                    snprintf(message, sizeof(message), "108 Félicitation vous avez reussis la manche\n");
+                    envoyer_message(sockets_joueurs[i], message);
+                    printf("Félicitation vous avez reussis la manche\n");
+                }
                 break;
             }
+
+
+
             printf("carte jouée par le joueur %d : %d\n", curretplayer, nb_carte_joueur[curretplayer]);
             if (nb_carte_joueur[curretplayer] <jeu.tour_actuel)
             {
@@ -278,7 +297,7 @@ int main() {
             
             } else{
                 char message[256];
-                snprintf(message, sizeof(message), "Vous avez joué toutes vos cartes. Attendez la fin de la manche.\n");
+                snprintf(message, sizeof(message), "106 Vous avez joué toutes vos cartes. Attendez la fin de la manche.\n");
                 envoyer_message(sockets_joueurs[curretplayer], message);
             }
             

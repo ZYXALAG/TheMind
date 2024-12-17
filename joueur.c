@@ -80,9 +80,8 @@ void chat_loop(int server_socket, int *cartes, int nombre_cartes, int idjoueur) 
                 break;
             }
             buffer[bytes_received] = '\0'; // Null-terminate le message
-            if (!(strncmp(buffer, "200", 3) == 0)) {
-                printf("Message du serveur : %s\n", buffer +4);
-            }
+            printf("Message du serveur : %s\n", buffer +4);
+            
         }
     }
 }

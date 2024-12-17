@@ -208,7 +208,7 @@ int main() {
                 cartes[i] = 0;
             }
             
-            char *cartes_str = buffer + 12; // Ignore "Vos cartes : "
+            char *cartes_str = buffer + 17; // Ignore "Vos cartes : "
             char *token = strtok(cartes_str, " ");
             nombre_cartes = 0;
             while (token != NULL) {

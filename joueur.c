@@ -5,6 +5,8 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <time.h>
+
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
@@ -78,7 +80,9 @@ void chat_loop(int server_socket, int *cartes, int nombre_cartes, int idjoueur) 
                 break;
             }
             buffer[bytes_received] = '\0'; // Null-terminate le message
-            printf("Message du serveur : %s\n", buffer +4);
+            if (!(strncmp(buffer, "200", 3) == 0)) {
+                printf("Message du serveur : %s\n", buffer +4);
+            }
         }
     }
 }
@@ -129,7 +133,7 @@ int main() {
             continue;
         }
 
-        if (strncmp(buffer, "000", 3) == 0) {
+        if (strncmp(buffer, "200", 3) == 0) {
             continue;
         }
         printf("Message du serveur : %s\n", buffer+4);
@@ -137,7 +141,7 @@ int main() {
         // Vérifier si le message contient la liste des cartes
         if (strncmp(buffer, "103", 3) == 0) {
             // Extraire les cartes envoyées par le serveur
-            char *cartes_str = buffer + 12; // Ignore "Vos cartes : "
+            char *cartes_str = buffer + 17; // Ignore "Vos cartes : "
             char *token = strtok(cartes_str, " ");
             nombre_cartes = 0;
             while (token != NULL) {

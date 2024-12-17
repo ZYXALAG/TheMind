@@ -5,10 +5,11 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
-#define MAX_CARTES 1
+#define MAX_CARTES 100
 
 // Fonction pour afficher les cartes du joueur
 void afficher_cartes(int *cartes, int nombre_cartes) {
@@ -30,8 +31,61 @@ int carte_dans_main(int carte, int *cartes, int nombre_cartes) {
     return -1; // Carte non trouvée
 }
 
+void chat_loop(int server_socket, int carte_choisie, int* returnarr) {
+    fd_set readfds;
+    int max_sd = server_socket;
+    struct timeval timeout;
+    char buffer[BUFFER_SIZE];
 
-void chat_loop(int server_socket, int *cartes, int nombre_cartes, int idjoueur) {
+    // Initialiser le set de descripteurs de fichiers
+    FD_ZERO(&readfds);
+    FD_SET(server_socket, &readfds);
+
+
+    // Définir le délai d'attente (timeout)
+    timeout.tv_sec = carte_choisie*0.2;  // 5 secondes
+    timeout.tv_usec = 0;
+
+    // Utiliser select pour surveiller les sockets
+    int activity = select(max_sd + 1, &readfds, NULL, NULL, &timeout);
+
+    if (activity < 0) {
+        perror("Erreur lors de l'appel à select");
+        returnarr[0] = -1;
+        return;
+    } else if (activity == 0) {
+        returnarr[0] = 0;
+        return;
+    } else {
+        // Vérifier quel socket a des données disponibles
+        int bytes_recus = recv(server_socket, buffer, sizeof(buffer) - 1, 0);
+        if (bytes_recus <= 0) {
+            printf("Connexion terminée par le serveur.\n");
+            returnarr[0] = -1;
+            return;
+        }
+        if (strncmp(buffer, "200", 3) == 0) {
+            // Extraire les cartes envoyées par le serveur
+            char *time = buffer + 4; // Ignore "Vos cartes : "
+            int timestart = atoi(time);
+            printf("current time1 %d\n",timestart);
+            returnarr[0] = 1;
+            returnarr[1] = timestart;
+            return;
+        }
+
+    }
+
+    returnarr[0] = -1;
+    return;
+}
+
+
+
+
+
+
+/*void chat_loop(int server_socket, int *cartes, int nombre_cartes, int idjoueur) {
     int carte_choisie;
     fd_set readfds;
     char buffer[BUFFER_SIZE];
@@ -81,14 +135,19 @@ void chat_loop(int server_socket, int *cartes, int nombre_cartes, int idjoueur) 
             printf("Message du serveur : %s\n", buffer +4);
         }
     }
+}*/
+
+// Fonction de comparaison pour qsort
+int comparer(const void *a, const void *b) {
+    return (*(int *)a - *(int *)b);  // Comparer deux entiers
 }
 
 
 int main() {
     int serveur_fd;
     struct sockaddr_in serveur_addr;
-    char buffer[1024] = {0};
-    int cartes[MAX_CARTES] = {0}; // Cartes dans la main du joueur
+    char buffer[1024] = {};
+    int cartes[MAX_CARTES] = {}; // Cartes dans la main du joueur
     int nombre_cartes = 0;
 
     // Création de la socket
@@ -130,10 +189,11 @@ int main() {
         }
 
         buffer[bytes_recus] = '\0';
-        if (strncmp(buffer, "000", 3) == 0) {
+        if (strncmp(buffer, "200", 3) == 0) {
             // Extraire les cartes envoyées par le serveur
             char *time = buffer + 4; // Ignore "Vos cartes : "
-            timestart= atoi(time);
+            timestart = atoi(time);
+            printf("current time1 %d\n",timestart);
             continue;
         }
 
@@ -143,6 +203,11 @@ int main() {
         // Vérifier si le message contient la liste des cartes
         if (strncmp(buffer, "103", 3) == 0) {
             // Extraire les cartes envoyées par le serveur
+            for (int i = 0; i < MAX_CARTES; i++)
+            {
+                cartes[i] = 0;
+            }
+            
             char *cartes_str = buffer + 12; // Ignore "Vos cartes : "
             char *token = strtok(cartes_str, " ");
             nombre_cartes = 0;
@@ -150,15 +215,63 @@ int main() {
                 cartes[nombre_cartes++] = atoi(token);
                 token = strtok(NULL, " ");
             }
+            qsort(cartes, MAX_CARTES, sizeof(int), comparer);
             continue;
         }
 
         // Si c'est le tour du joueur
         if (strncmp(buffer, "101", 3) == 0) {
-            
-            chat_loop(serveur_fd, cartes, nombre_cartes, idjoueur);
+            int carte_choisie;
+            //printf("current time %d\n",(int)time(NULL));
+            // Demander à l'utilisateur de choisir une carte valide
+            int x = 1 ;
+            while (x>0) {
+                /*printf("%ld Choisissez une carte %ld à jouer : ",timestart, timestart-time(NULL));*/
+                if (x==2){
+                    printf("fhdsjqflkqhslqskhdf\n");
+                    x=1;
+                }
+                int condition = 1;
+                if(timestart-time(NULL)<0){
+                    printf("test3");
+                    //printf("index %d %d %d\n",(int) time(NULL), (int)timestart, (int) (time(NULL)-timestart));
+                    for (int i = 0; i < MAX_CARTES; i++){
+                        if (cartes[i] != -1 && cartes[i] != 0){
+                            
+                            printf("carte %d\n",cartes[i]);
+                            carte_choisie = cartes[i];
+                            int returnarr[2]= {0,0};
+                            chat_loop(serveur_fd, carte_choisie, returnarr);   
+                            if(returnarr[0]==0){
+                                carte_choisie = cartes[i];
+                                cartes[i] = -1;
+                                snprintf(buffer, sizeof(buffer), "%d %d", idjoueur, carte_choisie);
+                                send(serveur_fd, buffer, strlen(buffer), 0);
+                                printf("Vous avez joué la carte %d.\n", carte_choisie);
+                                condition = 0;
+                                break;  // Quitter la boucle de sélection de carte
+                            
+                            } else if (returnarr[0]==-1){
+                            printf("Connexion terminée par le serveur.\n");
+                                break;
+                            } else if (returnarr[0]==1){
+                                printf("tessssstttttttt\n");
+                                timestart = returnarr[1];
+                                x = 2;
+                                break;
+                            }
+                        }
+                    }   
+                    if (condition==0)
+                    {
+                        break;
+                    }     
+                }
 
+            }
+                
         }
+        
     }
 
     close(serveur_fd);

@@ -32,7 +32,7 @@ void trier_classement(Equipe equipes[], int n) {
 void sauvegarder_classement(Equipe equipes[], int n) {
     FILE *fichier = fopen("classement.txt", "w");
     if (fichier == NULL) {
-        perror("Erreur lors de l'ouverture du fichier");
+        printf("Erreur lors de l'ouverture du fichier.\n");
         return;
     }
 
@@ -46,25 +46,10 @@ void sauvegarder_classement(Equipe equipes[], int n) {
 }
 
 int main() {
-    Equipe equipes[MAX_EQUIPES];
-    int n;
+    Equipe equipes[MAX_EQUIPES] = {
+    };
 
-    printf("Entrez le nombre d'équipes (maximum %d): ", MAX_EQUIPES);
-    scanf("%d", &n);
-
-    if (n < 1 || n > MAX_EQUIPES) {
-        printf("Nombre d'équipes invalide. Utilisation de %d équipes.\n", MAX_EQUIPES);
-        n = MAX_EQUIPES;
-    }
-
-    // Input for each team's number of players and successful matches
-    for (int i = 0; i < n; i++) {
-        printf("Entrez les informations pour l'équipe %d :\n", i + 1);
-        printf("Nombre de joueurs: ");
-        scanf("%d", &equipes[i].nb_joueurs);
-        printf("Nombre de manches réussies: ");
-        scanf("%d", &equipes[i].manches_reussies);
-    }
+    int n = MAX_EQUIPES;
 
     trier_classement(equipes, n);
     afficher_classement(equipes, n);

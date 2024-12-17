@@ -295,13 +295,12 @@ int main() {
 
 
 
-            printf("carte jouée par le joueur %d : %d\n", curretplayer, nb_carte_joueur[curretplayer]);
+            printf("carte jouée par le joueur %d : %d\n", curretplayer+1, nb_carte_joueur[curretplayer]);
             if (nb_carte_joueur[curretplayer] <jeu.tour_actuel)
             {
                 char message[256];
                 snprintf(message, sizeof(message), "101 Vous pouvez jouer. Jouez une carte.\n");
                 envoyer_message(sockets_joueurs[curretplayer], message);
-                printf("testtestestestestefljhdjfhlsqkjhfjkdslkdjfhsqlstest\n");
             
             } else{
                 char message[256];

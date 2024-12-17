@@ -68,7 +68,6 @@ void chat_loop(int server_socket, int carte_choisie, int* returnarr) {
             // Extraire les cartes envoyées par le serveur
             char *time = buffer + 4; // Ignore "Vos cartes : "
             int timestart = atoi(time);
-            printf("current time2 %d\n",timestart);
             returnarr[0] = 1;
             returnarr[1] = timestart;
             return;
@@ -79,63 +78,6 @@ void chat_loop(int server_socket, int carte_choisie, int* returnarr) {
     returnarr[0] = -1;
     return;
 }
-
-
-
-
-
-
-/*void chat_loop(int server_socket, int *cartes, int nombre_cartes, int idjoueur) {
-    int carte_choisie;
-    fd_set readfds;
-    char buffer[BUFFER_SIZE];
-
-    while (1) {
-        // Initialiser le set de descripteurs
-        FD_ZERO(&readfds);
-        FD_SET(STDIN_FILENO, &readfds);         // Ajouter stdin (entrée utilisateur)
-        FD_SET(server_socket, &readfds);       // Ajouter le socket serveur
-        int max_fd = (server_socket > STDIN_FILENO) ? server_socket : STDIN_FILENO;
-
-        // Attendre une activité sur stdin ou le socket
-        int activity = select(max_fd + 1, &readfds, NULL, NULL, NULL);
-
-        if (activity < 0) {
-            perror("Erreur avec select");
-            break;
-        }
-
-        // Si l'utilisateur a saisi quelque chose
-        if (FD_ISSET(STDIN_FILENO, &readfds)) {
-            fgets(buffer, BUFFER_SIZE, stdin); // Lire l'entrée utilisateur
-            
-            // Vérifier si la carte est valide (présente dans la main du joueur)
-                carte_choisie = atoi(buffer);
-                int indice = carte_dans_main(carte_choisie, cartes, nombre_cartes);
-                if (indice != -1) {
-                    // Retirer la carte de la main et informer le serveur
-                    cartes[indice] = -1;
-                    snprintf(buffer, sizeof(buffer), "%d %d", idjoueur, carte_choisie);
-                    send(server_socket, buffer, strlen(buffer), 0);
-                    printf("Vous avez joué la carte %d.\n", carte_choisie);
-                    break;  // Quitter la boucle de sélection de carte
-                } else {
-                    printf("Carte invalide. Veuillez choisir une carte dans votre main.\n");
-                }
-        }
-
-        // Si le serveur a envoyé un message
-        if (FD_ISSET(server_socket, &readfds)) {
-            int bytes_received = recv(server_socket, buffer, BUFFER_SIZE - 1, 0);
-            if (bytes_received <= 0) {
-                printf("Le serveur a fermé la connexion.\n");
-                break;
-            }
-            buffer[bytes_received] = '\0'; // Null-terminate le message
-            printf("Message du serveur : %s\n", buffer +4);
-        }
-    }
-}*/
 
 // Fonction de comparaison pour qsort
 int comparer(const void *a, const void *b) {
@@ -193,7 +135,6 @@ int main() {
             // Extraire les cartes envoyées par le serveur
             char *time = buffer + 4; // Ignore "Vos cartes : "
             timestart = atoi(time);
-            printf("current time1 %d\n",timestart);
             continue;
         }
 
@@ -221,25 +162,16 @@ int main() {
 
         // Si c'est le tour du joueur
         if (strncmp(buffer, "101", 3) == 0) {
+            timestart = time(NULL)+2;
             int carte_choisie;
-            //printf("current time %d\n",(int)time(NULL));
             // Demander à l'utilisateur de choisir une carte valide
             int x = 1 ;
             while (x>0) {
-                /*printf("%ld Choisissez une carte %ld à jouer : ",timestart, timestart-time(NULL));*/
-                if (x==2){
-                    printf("fhdsjqflkqhslqskhdf\n");
-                    x=1;
-                }
 
                 int condition = 1;
                 if(timestart-time(NULL)<0){
-                    printf("test3");
-                    //printf("index %d %d %d\n",(int) time(NULL), (int)timestart, (int) (time(NULL)-timestart));
                     for (int i = 0; i < MAX_CARTES; i++){
                         if (cartes[i] != -1 && cartes[i] != 0){
-                            
-                            printf("carte %d\n",cartes[i]);
                             carte_choisie = cartes[i];
                             int returnarr[2]= {0,0};
                             chat_loop(serveur_fd, carte_choisie, returnarr);   
@@ -254,11 +186,10 @@ int main() {
                             
                             } else if (returnarr[0]==-1){
                             printf("Connexion terminée par le serveur.\n");
-                                break;
+                            break;
+                            condition = 0;
                             } else if (returnarr[0]==1){
-                                printf("tessssstttttttt\n");
                                 timestart = returnarr[1];
-                                x = 2;
                                 break;
                             }
                         }

@@ -327,6 +327,9 @@ int main() {
     }
     
 fin:
+    printf("Stat de partie\n");
+    printf("Nombre de round gagné %d \n", jeu.tour_actuel);
+
     // Fermeture des sockets
     for (int i = 0; i < MAX_JOUEURS; i++) {
         close(sockets_joueurs[i]);

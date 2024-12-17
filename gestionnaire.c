@@ -301,10 +301,12 @@ int main() {
                 char messagetime[256];
                 snprintf(messagetime, sizeof(messagetime), "200 %d\n", newtime+2);
                 envoyer_message(sockets_joueurs[curretplayer], messagetime);
-                
+                printf("testtestestestestestest\n");
+                sleep(0.5);
                 char message[256];
                 snprintf(message, sizeof(message), "101 Vous pouvez jouer. Jouez une carte.\n");
                 envoyer_message(sockets_joueurs[curretplayer], message);
+                printf("testtestestestestefljhdjfhlsqkjhfjkdslkdjfhsqlstest\n");
             
             } else{
                 char message[256];

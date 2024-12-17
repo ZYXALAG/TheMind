@@ -153,6 +153,7 @@ int main() {
 
         // Si c'est le tour du joueur
         if (strncmp(buffer, "101", 3) == 0) {
+
             chat_loop(serveur_fd, cartes, nombre_cartes, idjoueur);
 
         }

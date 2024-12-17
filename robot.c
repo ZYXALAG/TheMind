@@ -68,7 +68,7 @@ void chat_loop(int server_socket, int carte_choisie, int* returnarr) {
             // Extraire les cartes envoyées par le serveur
             char *time = buffer + 4; // Ignore "Vos cartes : "
             int timestart = atoi(time);
-            printf("current time1 %d\n",timestart);
+            printf("current time2 %d\n",timestart);
             returnarr[0] = 1;
             returnarr[1] = timestart;
             return;
@@ -231,6 +231,7 @@ int main() {
                     printf("fhdsjqflkqhslqskhdf\n");
                     x=1;
                 }
+
                 int condition = 1;
                 if(timestart-time(NULL)<0){
                     printf("test3");
